@@ -1,0 +1,79 @@
+name: Build Martin WASM
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout sherpa-onnx v1.13.8
+        uses: actions/checkout@v4
+        with:
+          ref: v1.13.8
+          submodules: recursive
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake make git wget bzip2
+
+      - name: Install Emscripten 4.0.23
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install 4.0.23
+          ./emsdk activate 4.0.23
+
+      - name: Download Martin
+        run: |
+          wget -O martin.tar.bz2 \
+            https://huggingface.co/miro-dietiker/kokoro-de-martin/resolve/main/kokoro-de-martin.tar.bz2
+
+          mkdir martin
+          tar -xjf martin.tar.bz2 -C martin
+
+          echo "Martin archive:"
+          find martin -maxdepth 3 -type f | head -100
+
+      - name: Prepare Martin assets
+        run: |
+          rm -rf wasm/tts/assets
+          mkdir -p wasm/tts/assets
+
+          MARTIN_DIR=$(dirname "$(find martin -name model.onnx -print -quit)")
+
+          echo "Martin directory: $MARTIN_DIR"
+
+          cp "$MARTIN_DIR/model.onnx" wasm/tts/assets/
+          cp "$MARTIN_DIR/voices.bin" wasm/tts/assets/
+          cp "$MARTIN_DIR/tokens.txt" wasm/tts/assets/
+          cp -R "$MARTIN_DIR/espeak-ng-data" wasm/tts/assets/
+
+          echo "Assets:"
+          ls -lah wasm/tts/assets
+
+      - name: Build WASM TTS
+        run: |
+          source emsdk/emsdk_env.sh
+          ./build-wasm-simd-tts.sh
+
+      - name: Collect result
+        run: |
+          mkdir martin-wasm-v1.13.8
+
+          cp build-wasm-simd-tts/install/bin/wasm/tts/sherpa-onnx-wasm-main-tts.js martin-wasm-v1.13.8/
+          cp build-wasm-simd-tts/install/bin/wasm/tts/sherpa-onnx-wasm-main-tts.wasm martin-wasm-v1.13.8/
+          cp build-wasm-simd-tts/install/bin/wasm/tts/sherpa-onnx-wasm-main-tts.data martin-wasm-v1.13.8/
+          cp build-wasm-simd-tts/install/bin/wasm/tts/sherpa-onnx-tts.js martin-wasm-v1.13.8/
+
+          echo "Finished:"
+          ls -lh martin-wasm-v1.13.8/
+
+      - name: Upload finished Martin runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: martin-sherpa-onnx-v1.13.8-wasm
+          path: martin-wasm-v1.13.8/
+          if-no-files-found: error
