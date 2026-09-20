@@ -11,7 +11,7 @@ jobs:
       - name: Checkout sherpa-onnx v1.13.8
         uses: actions/checkout@v4
         with:
-        repository: k2-fsa/sherpa-onnx
+          repository: k2-fsa/sherpa-onnx
           ref: v1.13.8
           submodules: recursive
 
